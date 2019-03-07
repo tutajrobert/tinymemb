@@ -1,23 +1,37 @@
 import tinymemb
 
-PREP = tinymemb.Prep()
+STEEL = [200e3, .3]
 
 GEOM = tinymemb.Geom()
-kp1 = GEOM.kpoint(0, 0)
-kp2 = GEOM.kpoint(2, 4)
-kp3 = GEOM.kpoint(2, -4)
+kp1 = (0, 0)
+kp2 = (6, 8)
+kp3 = (1, 0)
+kp4 = (5, -6)
+
 sup1 = GEOM.supele(kp1, kp2)
-sup2 = GEOM.supele(kp1, kp3)
+sup2 = GEOM.supele(kp3, kp4)
 
-elast_mod = 205e3
-mesh1 = PREP.mesh(sup1, 1, elast_mod)
-mesh2 = PREP.mesh(sup2, 1, elast_mod)
+MESH = tinymemb.Mesh(GEOM)
+mesh1 = MESH.generate(sup1, size=2)
+mesh2 = MESH.generate(sup2, size=1)
 
-PREP.nmerge(0, 0)
-PREP.nmerge(2, 0)
+MESH.nmerge(2, 0)
+MESH.nmerge(4, 0)
+MESH.assignprop(mesh1, STEEL, thickness=3)
+MESH.assignprop(mesh2, STEEL, thickness=1)
 #PREP.info()
 
-SOLV = tinymemb.Solv(PREP)
+SOLV = tinymemb.Solv(MESH)
+SOLV.build()
+SOLV.support(0, 8)
+SOLV.support(2, 8)
+SOLV.support(4, 8)
+SOLV.support(6, 8)
+SOLV.force(5, -6, 1000)
+
+res = SOLV.solve()
+print(min(res))
+print(max(res))
 
 """
     a = [0, None, 3]
