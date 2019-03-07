@@ -152,6 +152,16 @@ class Solv():
             self.gklist[i].append(self.clist[i])
         self.dlist = self.gausselim(self.gklist)
         return self.dlist
+
+    def backsolve4force(self, x, y, dlist):
+        nnum = self.prepclass.ncheck(x, y)[0]
+        dof = self.nod2dofmap[nnum]
+        force = 0
+        for i in range(0, self.nodesnum * 2):
+            if self.gklist[dof][i] * dlist[i]:
+                force += self.gklist[dof][i] * dlist[i]
+        return force
+
 class Mesh():
     def __init__(self, geomclass):
         self.geomclass = geomclass
@@ -180,7 +190,6 @@ class Mesh():
                                           j + 1 + ((height + 1) * (i + 1)),
                                           j + ((height + 1) * (i + 1)), 
                                           j + ((height + 1) * i)))
-        print(eles)
         self.meshdict[self.meshnum] = [eles, 0, 0, size]
         self.next_nnum += 1 + nodes[-1] - nodes[0]
         return self.meshnum
