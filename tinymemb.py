@@ -122,7 +122,25 @@ class Solv():
         nnum = self.prepclass.ncheck(x, y)[0]
         dof = self.nod2dofmap[nnum]
         self.clist[dof] = force_value
-
+    
+    def connector(self, node1, node2):
+        dofs = []
+        dof1 = self.nod2dofmap[node1]
+        dof2 = self.nod2dofmap[node2]
+        dofs.append(dof1)
+        dofs.append(dof1 + 1)
+        dofs.append(dof2)
+        dofs.append(dof2 + 1)
+        k = 2e5
+        klist = [[k, 0, 0, 0],
+                 [0, k, 0, 0],
+                 [0, 0, k, 0],
+                 [0, 0, 0, k]]
+        
+        for i in range(4):
+            for j in range(4):
+                self.gklist[dofs[i]][dofs[j]] += klist[i][j]
+                print(self.gklist[dofs[i]][dofs[j]])
     @staticmethod
     def gausselim(m):
         #eliminate columns
@@ -190,7 +208,7 @@ class Mesh():
                                           j + 1 + ((height + 1) * (i + 1)),
                                           j + ((height + 1) * (i + 1)), 
                                           j + ((height + 1) * i)))
-        self.meshdict[self.meshnum] = [eles, 0, 0, size]
+        self.meshdict[self.meshnum] = [eles, 0, 0, size, nodes]
         self.next_nnum += 1 + nodes[-1] - nodes[0]
         return self.meshnum
 
@@ -204,3 +222,10 @@ class Mesh():
     def assignprop(self, meshnum, mat_params, thickness):
         self.meshdict[meshnum][1] = mat_params
         self.meshdict[meshnum][2] = thickness
+        
+    def selectnode(self, coords, meshnum):
+        x, y = coords[0], coords[1]
+        nnum_list = self.PREP.ncheck(x, y)
+        for nnum in nnum_list:
+            if nnum in self.meshdict[meshnum][4]:
+                return nnum

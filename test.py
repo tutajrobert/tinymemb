@@ -15,16 +15,25 @@ MESH = tinymemb.Mesh(GEOM)
 mesh1 = MESH.generate(sup1, size=2)
 mesh2 = MESH.generate(sup2, size=1)
 
-MESH.nmerge(2, 0)
-MESH.nmerge(4, 0)
-MESH.assignprop(mesh1, STEEL, thickness=3)
-MESH.assignprop(mesh2, STEEL, thickness=1)
-#PREP.info()
+node1 = MESH.selectnode([2, 0], mesh1)
+node2 = MESH.selectnode([2, 0], mesh2)
+
+node3 = MESH.selectnode([4, 0], mesh1)
+node4 = MESH.selectnode([4, 0], mesh2)
+print(node1, node2, node3, node4)
+
+
+#MESH.nmerge(2, 0)
+#MESH.nmerge(4, 0)
+MESH.assignprop(mesh1, STEEL, thickness=6)
+MESH.assignprop(mesh2, STEEL, thickness=3)
 
 SOLV = tinymemb.Solv(MESH)
 SOLV.build()
-SOLV2 = tinymemb.Solv(MESH)
-SOLV2.build()
+SOLV.connector(node1, node2)
+#SOLV.connector(node1, node4)
+SOLV.connector(node3, node4)
+#SOLV.connector(node2, node3)
 SOLV.support(0, 8)
 SOLV.support(2, 8)
 SOLV.support(4, 8)
@@ -32,6 +41,11 @@ SOLV.support(6, 8)
 SOLV.force(5, -6, 1000)
 
 res = SOLV.solve()
+print(max(res))
+print(min(res))
+"""
+SOLV2 = tinymemb.Solv(MESH)
+SOLV2.build()
 force1 = SOLV2.backsolve4force(2, 0, res)
 force2 = SOLV2.backsolve4force(4, 0, res)
 force3 = SOLV2.backsolve4force(5, -6, res)
@@ -39,6 +53,7 @@ react = SOLV2.backsolve4force(0, 8, res)
 react2 = SOLV2.backsolve4force(2, 8, res)
 react3 = SOLV2.backsolve4force(4, 8, res)
 react4 = SOLV2.backsolve4force(6, 8, res)
+
 print(min(res))
 print(max(res))
 print(force1)
@@ -46,7 +61,7 @@ print(force2)
 print(force3)
 print(react, react2, react3, react4)
 print(react + react2 + react3 + react4)
-
+"""
 """
     a = [0, None, 3]
     b = [0, 5, 3]
