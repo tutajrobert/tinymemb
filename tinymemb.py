@@ -131,16 +131,16 @@ class Solv():
         dofs.append(dof1 + 1)
         dofs.append(dof2)
         dofs.append(dof2 + 1)
-        k = 2e5
-        klist = [[k, 0, 0, 0],
-                 [0, k, 0, 0],
-                 [0, 0, k, 0],
-                 [0, 0, 0, k]]
+        k = 2e10
+        klist = [[k, 0, -k, 0],
+                 [0, k, 0, -k],
+                 [-k, 0, k, 0],
+                 [0, -k, 0, k]]
         
         for i in range(4):
             for j in range(4):
                 self.gklist[dofs[i]][dofs[j]] += klist[i][j]
-                print(self.gklist[dofs[i]][dofs[j]])
+
     @staticmethod
     def gausselim(m):
         #eliminate columns
@@ -173,6 +173,7 @@ class Solv():
 
     def backsolve4force(self, x, y, dlist):
         nnum = self.prepclass.ncheck(x, y)[0]
+        print(nnum)
         dof = self.nod2dofmap[nnum]
         force = 0
         for i in range(0, self.nodesnum * 2):
