@@ -1,31 +1,29 @@
 import tinymemb
 
-STEEL = [200e3, .3]
+STEEL_modulus = 200e3
+STEEL_poissratio = .3
 
 GEOM = tinymemb.Geom()
-kp1 = (0, 0)
-kp2 = (6, 8)
-kp3 = (1, 0)
-kp4 = (5, -6)
-
-sup1 = GEOM.supele(kp1, kp2)
-sup2 = GEOM.supele(kp3, kp4)
+p1 = GEOM.point(0, 0)
+p2 = GEOM.point(6, 8)
+p3 = GEOM.point(1, 0)
+p4 = GEOM.point(5, -6)
+rec1 = GEOM.rectangle(p1, p2)
+rec2 = GEOM.rectangle(p3, p4)
 
 MESH = tinymemb.Mesh(GEOM)
-mesh1 = MESH.generate(sup1, size=2)
-mesh2 = MESH.generate(sup2, size=1)
+mesh1 = MESH.generate(rec1, size=2)
+mesh2 = MESH.generate(rec2, size=1)
 
-node1 = MESH.selectnode([2, 0], mesh1)
-node2 = MESH.selectnode([2, 0], mesh2)
+node1 = MESH.selectnode(2, 0, mesh1)
+node2 = MESH.selectnode(2, 0, mesh2)
+node3 = MESH.selectnode(4, 0, mesh1)
+node4 = MESH.selectnode(4, 0, mesh2)
 
-node3 = MESH.selectnode([4, 0], mesh1)
-node4 = MESH.selectnode([4, 0], mesh2)
-#print(node1, node2, node3, node4)
-
-#MESH.nmerge(2, 0)
-#MESH.nmerge(4, 0)
-MESH.assignprop(mesh1, STEEL, thickness=3)
-MESH.assignprop(mesh2, STEEL, thickness=1)
+#MESH.mergenodes(node1, node2)
+#MESH.mergenodes(node3, node4)
+MESH.assignproperty(mesh1, young=200e3, poisson=.3, thickness=3)
+MESH.assignproperty(mesh2, young=200e3, poisson=.3, thickness=1)
 
 SOLV = tinymemb.Solv(MESH)
 SOLV.build()
@@ -43,9 +41,9 @@ res = SOLV.solve()
 
 SOLV2 = tinymemb.Solv(MESH)
 SOLV2.build()
-SOLV2.connector(node1, node2)
+#SOLV2.connector(node1, node2)
 #SOLV.connector(node1, node4)
-SOLV2.connector(node3, node4)
+#SOLV2.connector(node3, node4)
 force1 = SOLV2.backsolve4force(2, 0, res)
 force2 = SOLV2.backsolve4force(4, 0, res)
 force3 = SOLV2.backsolve4force(5, -6, res)

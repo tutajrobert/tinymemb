@@ -1,4 +1,5 @@
 class Prep():
+    """Preprocessor class. Not used by the user"""
     def __init__(self):
         self.ndict = {}
         self.edict = {}
@@ -6,56 +7,57 @@ class Prep():
         self.enum = 0
 
     def node(self, x, y):
+        """Creates node and returns its number"""
         self.nnum += 1
         self.ndict[self.nnum] = [x, y]
         return self.nnum
 
-    def ndel(self, nnum):
-        del self.ndict[nnum]
+    def deletenode(self, nodenum):
+        """Deletes node entry from nodes dictionary"""
+        del self.ndict[nodenum]
 
-    def ncheck(self, x, y):
-        nnum_list = []
-        for nnum in self.ndict:
-            if self.ndict[nnum] == [x, y]:
-                nnum_list.append(nnum)
-        return nnum_list
+    def nodes_bycoords(self, x, y):
+        """Returns node numbers of given x, y position in list"""
+        nodenum_list = []
+        for nodenum in self.ndict:
+            if self.ndict[nodenum] == [x, y]:
+                nodenum_list.append(nodenum)
+        return nodenum_list
 
-    def ele(self, n1, n2, n3, n4):
+    def element(self, n1, n2, n3, n4):
+        """Creates element and returns its number"""
         self.enum += 1
         self.edict[self.enum] = [n1, n2, n3, n4]
         return self.enum
 
-    def nswap_in_eles(self, nnum_list, nnum_tomerge):
+    def swap_nodenum(self, nodenum_toleft, nodenum_tomerge):
+        """Swaps node numbers to merge two nodes"""
         for enum in self.edict:
             for i in range(4):
-                if self.edict[enum][i] in nnum_list:
-                    self.edict[enum][i] = nnum_tomerge
-
-    def nclear_unused(self, nnum_list, nnum_tomerge):
-        for nnum in nnum_list:
-            if nnum != nnum_tomerge:
-                self.ndel(nnum)
+                if self.edict[enum][i] == nodenum_tomerge:
+                    self.edict[enum][i] = nodenum_toleft
 
 class Geom():
+    """Geometry class contains points and rectangles"""
     def __init__(self):
-        self.kdict = {}
-        self.supdict = {}
-        self.supnum = 0
-        self.knum = 0
+        self.rectsdict, self.pointsdict = {}, {}
+        self.rectnum, self.pointnum = 0, 0
 
-    def supele(self, kpoint_start, kpoint_end):
-        self.supnum += 1
-        self.supdict[self.supnum] = [kpoint_start, kpoint_end]
-        return self.supnum
+    def rectangle(self, startpoint, endpoint):
+        """Creates rectangle from startpoint to endpoint. Returns rectangle number"""
+        self.rectnum += 1
+        self.rectsdict[self.rectnum] = [startpoint, endpoint]
+        return self.rectnum
 
-    def kpoint(self, x, y):
-        self.knum += 1
-        self.kdict[self.knum] = [x, y]
-        return self.kdict[self.knum]
+    def point(self, x, y):
+        """Creates point of x, y coordinates. Returns coordinates list [x, y]"""
+        self.pointnum += 1
+        self.pointsdict[self.pointnum] = [x, y]
+        return self.pointsdict[self.pointnum]
 
 class Solv():
     def __init__(self, meshclass):
-        self.prepclass = meshclass.PREP
+        self.prepclass = meshclass.prepclass
         self.meshclass = meshclass
         self.nod2dofmap = {}
         self.dofnum = 0
@@ -110,7 +112,7 @@ class Solv():
                         self.gklist[dofs[i]][dofs[j]] += klist[i][j]
 
     def support(self, x, y):
-        nnum = self.prepclass.ncheck(x, y)[0]
+        nnum = self.prepclass.nodes_bycoords(x, y)[0]
         dofs = [self.nod2dofmap[nnum], self.nod2dofmap[nnum] + 1]
         for dof in dofs:
             self.gklist[dof] = [0 for i in range(self.nodesnum * 2)]
@@ -119,7 +121,7 @@ class Solv():
             self.gklist[dof][dof] = 1
 
     def force(self, x, y, force_value):
-        nnum = self.prepclass.ncheck(x, y)[0]
+        nnum = self.prepclass.nodes_bycoords(x, y)[0]
         dof = self.nod2dofmap[nnum]
         self.clist[dof] = force_value
     
@@ -172,7 +174,7 @@ class Solv():
         return self.dlist
 
     def backsolve4force(self, x, y, dlist):
-        nnum = self.prepclass.ncheck(x, y)[0]
+        nnum = self.prepclass.nodes_bycoords(x, y)[0]
         print(nnum)
         dof = self.nod2dofmap[nnum]
         force = 0
@@ -182,51 +184,54 @@ class Solv():
         return force
 
 class Mesh():
+    """Mesh class contains meshes and initializes preprocessor class"""
     def __init__(self, geomclass):
-        self.geomclass = geomclass
-        self.PREP = Prep()
+        self.geomclass = geomclass #access to rectangles needed
+        self.prepclass = Prep() #initialization of preprocessor class
         self.meshdict = {}
         self.meshnum = 0
-        self.next_nnum = 1
+        self.nodenum_4nextmesh = 1 #number of next node, which is a starting number for every mesh
         
     def generate(self, rectnum, size=1):
+        """Mesh generation procedure. Creates nodes and elements in preprocessor class.
+           Returns generated mesh number"""
         self.meshnum += 1
         nodes = []
         eles = []
-        
-        rectgeom = self.geomclass.supdict[rectnum]
+        rectgeom = self.geomclass.rectsdict[rectnum]
         xlist, ylist = [rectgeom[0][0], rectgeom[1][0]], [rectgeom[0][1], rectgeom[1][1]]
         width = int(abs(rectgeom[1][0] - rectgeom[0][0]) / size)
         height = int(abs(rectgeom[1][1] - rectgeom[0][1]) / size)
 
+        #Generating nodes
         for i in range(min(xlist), max(xlist) + 1, size):
             for j in range(min(ylist), max(ylist) + 1, size):
-                nodes.append(self.PREP.node(i, j))
+                nodes.append(self.prepclass.node(i, j))
 
+        #Generating elements on nodes
         for i in range(width):
-            for j in range(self.next_nnum, self.next_nnum + height):
-                eles.append(self.PREP.ele(j + 1 + ((height + 1) * i), 
-                                          j + 1 + ((height + 1) * (i + 1)),
-                                          j + ((height + 1) * (i + 1)), 
-                                          j + ((height + 1) * i)))
-        self.meshdict[self.meshnum] = [eles, 0, 0, size, nodes]
-        self.next_nnum += 1 + nodes[-1] - nodes[0]
+            for j in range(self.nodenum_4nextmesh, self.nodenum_4nextmesh + height):
+                eles.append(self.prepclass.element(j + 1 + ((height + 1) * i), 
+                                                   j + 1 + ((height + 1) * (i + 1)),
+                                                   j + ((height + 1) * (i + 1)), 
+                                                   j + ((height + 1) * i)))
+        self.meshdict[self.meshnum] = [eles, 0, 0, size, nodes] #0 are placeholders for material
+        self.nodenum_4nextmesh += 1 + nodes[-1] - nodes[0]
         return self.meshnum
 
-    def nmerge(self, x, y):
-        nnum_list = self.PREP.ncheck(x, y)
-        if nnum_list:
-            nnum_tomerge = min(nnum_list)
-            self.PREP.nswap_in_eles(nnum_list, nnum_tomerge)
-            self.PREP.nclear_unused(nnum_list, nnum_tomerge)
+    def mergenodes(self, nodenum_toleft, nodenum_tomerge):
+        """Merges two nodes into one"""
+        self.prepclass.swap_nodenum(nodenum_toleft, nodenum_tomerge)
+        self.prepclass.deletenode(nodenum_tomerge)
 
-    def assignprop(self, meshnum, mat_params, thickness):
-        self.meshdict[meshnum][1] = mat_params
+    def assignproperty(self, meshnum, young, poisson, thickness):
+        """Assigns material parameters and thickness to mesh"""
+        self.meshdict[meshnum][1] = [young, poisson]
         self.meshdict[meshnum][2] = thickness
         
-    def selectnode(self, coords, meshnum):
-        x, y = coords[0], coords[1]
-        nnum_list = self.PREP.ncheck(x, y)
-        for nnum in nnum_list:
-            if nnum in self.meshdict[meshnum][4]:
-                return nnum
+    def selectnode(self, x, y, meshnum):
+        """Returns node number of given position and in given mesh"""
+        nodenum_list = self.prepclass.nodes_bycoords(x, y)
+        for nodenum in nodenum_list:
+            if nodenum in self.meshdict[meshnum][4]:
+                return nodenum
