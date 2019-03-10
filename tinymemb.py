@@ -1,3 +1,4 @@
+"""Tiny finite element method application for plane stress problems and bolt's forces"""
 class Prep():
     """Preprocessor class. Not used by the user"""
     def __init__(self):
@@ -56,19 +57,19 @@ class Geom():
         return self.pointsdict[self.pointnum]
 
 class Solv():
+    """Solver class contains matrices and functions needed for calculation"""
     def __init__(self, meshclass):
         self.prepclass = meshclass.prepclass
         self.meshclass = meshclass
-        self.nod2dofmap = {}
-        self.dofnum = 0
-        self.nodesnum = len(self.prepclass.ndict)
-        self.clist = [0 for i in range(self.nodesnum * 2)]
-        self.gklist = [[0 for i in range(self.nodesnum * 2)] for j in range(self.nodesnum * 2)]
-        self.dofmapping()
+        self.nodesnum = len(self.prepclass.ndict) #number of nodes
+        self.fvector = [0 for i in range(self.nodesnum * 2)] #external forces vector
+        self.kmatrix = [[0 for i in range(self.nodesnum * 2)] for j in range(self.nodesnum * 2)]
+        self.kmatrix_4backsolve = [[0 for i in range(self.nodesnum * 2)] for j in range(self.nodesnum * 2)]
+        self.nodenum_todof_mapping()
 
     @staticmethod
-    def stiff_matrix(E, v, h):
-        """Element stiffness matrix"""
+    def stiffmatrix_ofsquare(E, v, h):
+        """Returns 4 noded membrane element stiffness matrix"""
         p = (E * h) / (12 * (1 - (v ** 2)))
         q = (E * h) / (1 - v)
         k11 = p * 2 * (3 - v)
@@ -89,62 +90,70 @@ class Solv():
                  [k18, k13, k12, k15, k14, k17, k16, k11]]
         return klist
 
-    def dofmapping(self):
-        for nnum in self.prepclass.ndict:
-            self.nod2dofmap[nnum] = self.dofnum
+    def nodenum_todof_mapping(self):
+        """Creates node number to degree of freedom relation"""
+        self.nodenum_todof = {} #dictionary for nodes to dofs mapping
+        self.dofnum = 0
+        for nodenum in self.prepclass.ndict:
+            self.nodenum_todof[nodenum] = self.dofnum
             self.dofnum += 2
 
     def build(self):
+        """Global stiffness matrix aggregation"""
         for meshnum in self.meshclass.meshdict:
             eles = self.meshclass.meshdict[meshnum][0]
-            mat_params = self.meshclass.meshdict[meshnum][1]
+            mat_params = self.meshclass.meshdict[meshnum][1] #[young modulus, poisson ratio]
             thickness = self.meshclass.meshdict[meshnum][2]
-            size = self.meshclass.meshdict[meshnum][3]
-            klist = self.stiff_matrix(mat_params[0], mat_params[1], thickness)
+            elematrix = self.stiffmatrix_ofsquare(mat_params[0], mat_params[1], thickness)
             for enum in eles:
                 nodes = self.prepclass.edict[enum]
-                dofs = []
+                dof_list = []
                 for nnum in nodes:
-                    dofs.append(self.nod2dofmap[nnum])
-                    dofs.append(self.nod2dofmap[nnum] + 1)
+                    dof_list.append(self.nodenum_todof[nnum])
+                    dof_list.append(self.nodenum_todof[nnum] + 1)
                 for i in range(8):
                     for j in range(8):
-                        self.gklist[dofs[i]][dofs[j]] += klist[i][j]
-
-    def support(self, x, y):
-        nnum = self.prepclass.nodes_bycoords(x, y)[0]
-        dofs = [self.nod2dofmap[nnum], self.nod2dofmap[nnum] + 1]
-        for dof in dofs:
-            self.gklist[dof] = [0 for i in range(self.nodesnum * 2)]
-            for row in self.gklist:
+                        self.kmatrix[dof_list[i]][dof_list[j]] += elematrix[i][j]
+                        self.kmatrix_4backsolve[dof_list[i]][dof_list[j]] += elematrix[i][j]
+    def support(self, nodenum, x=True, y=True):
+        """Supports creation procedure"""
+        dof_list = [self.nodenum_todof[nodenum], self.nodenum_todof[nodenum] + 1]
+        if x is False:
+            dof_list.pop(0)
+        if y is False:
+            dof_list.pop(1)
+        for dof in dof_list:
+            self.kmatrix[dof] = [0 for i in range(self.nodesnum * 2)]
+            for row in self.kmatrix:
                 row[dof] = 0
-            self.gklist[dof][dof] = 1
+            self.kmatrix[dof][dof] = 1
 
-    def force(self, x, y, force_value):
-        nnum = self.prepclass.nodes_bycoords(x, y)[0]
-        dof = self.nod2dofmap[nnum]
-        self.clist[dof] = force_value
-    
-    def connector(self, node1, node2):
+    def force(self, nodenum, xforce=0, yforce=0):
+        """Force application procedure"""
+        dof = self.nodenum_todof[nodenum]
+        self.fvector[dof] = xforce
+        self.fvector[dof + 1] = yforce
+
+    def connector(self, node1, node2, k=2e10):
+        """Inplane onnector creation for nodes pair"""
         dofs = []
-        dof1 = self.nod2dofmap[node1]
-        dof2 = self.nod2dofmap[node2]
+        dof1 = self.nodenum_todof[node1]
+        dof2 = self.nodenum_todof[node2]
         dofs.append(dof1)
         dofs.append(dof1 + 1)
         dofs.append(dof2)
         dofs.append(dof2 + 1)
-        k = 2e10
-        klist = [[k, 0, -k, 0],
-                 [0, k, 0, -k],
-                 [-k, 0, k, 0],
-                 [0, -k, 0, k]]
-        
+        connmatrix = [[k, 0, -k, 0],
+                      [0, k, 0, -k],
+                      [-k, 0, k, 0],
+                      [0, -k, 0, k]]
         for i in range(4):
             for j in range(4):
-                self.gklist[dofs[i]][dofs[j]] += klist[i][j]
+                self.kmatrix[dofs[i]][dofs[j]] += connmatrix[i][j]
 
     @staticmethod
     def gausselim(m):
+        """Gauss elimination procedure"""
         #eliminate columns
         for col in range(len(m[0])):
             for row in range(col+1, len(m)):
@@ -161,26 +170,26 @@ class Solv():
                 #substitute in all known coefficients
                 for x in range(sol):
                     inner += (ans[x]*m[sol][-2-x])
-                #the equation is now reduced to ax + b = c form
+                #the equation is now reduced to ax + b = c
                 #solve with (c - b) / a
                 ans.append((m[sol][-1]-inner)/m[sol][-sol-2])
         ans.reverse()
         return ans
 
     def solve(self):
-        for i in range(len(self.clist)):
-            self.gklist[i].append(self.clist[i])
-        self.dlist = self.gausselim(self.gklist)
-        return self.dlist
+        """Solve matrix equation kmatrix * uvector = fvector"""
+        for i in range(len(self.fvector)):
+            self.kmatrix[i].append(self.fvector[i])
+        self.uvector = self.gausselim(self.kmatrix)
+        return self.uvector
 
-    def backsolve4force(self, x, y, dlist):
-        nnum = self.prepclass.nodes_bycoords(x, y)[0]
-        print(nnum)
-        dof = self.nod2dofmap[nnum]
+    def backsolve_4force(self, nodenum):
+        """Back calculation for force"""
+        dof = self.nodenum_todof[nodenum]
         force = 0
         for i in range(0, self.nodesnum * 2):
-            if self.gklist[dof][i] * dlist[i]:
-                force += self.gklist[dof][i] * dlist[i]
+            if self.kmatrix_4backsolve[dof][i] * self.uvector[i]:
+                force += self.kmatrix_4backsolve[dof][i] * self.uvector[i]
         return force
 
 class Mesh():
@@ -191,7 +200,7 @@ class Mesh():
         self.meshdict = {}
         self.meshnum = 0
         self.nodenum_4nextmesh = 1 #number of next node, which is a starting number for every mesh
-        
+
     def generate(self, rectnum, size=1):
         """Mesh generation procedure. Creates nodes and elements in preprocessor class.
            Returns generated mesh number"""
@@ -211,9 +220,9 @@ class Mesh():
         #Generating elements on nodes
         for i in range(width):
             for j in range(self.nodenum_4nextmesh, self.nodenum_4nextmesh + height):
-                eles.append(self.prepclass.element(j + 1 + ((height + 1) * i), 
+                eles.append(self.prepclass.element(j + 1 + ((height + 1) * i),
                                                    j + 1 + ((height + 1) * (i + 1)),
-                                                   j + ((height + 1) * (i + 1)), 
+                                                   j + ((height + 1) * (i + 1)),
                                                    j + ((height + 1) * i)))
         self.meshdict[self.meshnum] = [eles, 0, 0, size, nodes] #0 are placeholders for material
         self.nodenum_4nextmesh += 1 + nodes[-1] - nodes[0]
@@ -228,10 +237,13 @@ class Mesh():
         """Assigns material parameters and thickness to mesh"""
         self.meshdict[meshnum][1] = [young, poisson]
         self.meshdict[meshnum][2] = thickness
-        
-    def selectnode(self, x, y, meshnum):
+
+    def selectnode(self, x, y, meshnum=False):
         """Returns node number of given position and in given mesh"""
         nodenum_list = self.prepclass.nodes_bycoords(x, y)
         for nodenum in nodenum_list:
-            if nodenum in self.meshdict[meshnum][4]:
-                return nodenum
+            if meshnum:
+                if nodenum in self.meshdict[meshnum][4]:
+                    return nodenum
+            elif meshnum is False:
+                return nodenum_list[0]
