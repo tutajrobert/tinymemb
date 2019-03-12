@@ -1,4 +1,6 @@
 """Tiny finite element method application for plane stress problems and bolt's forces"""
+from math import sqrt
+
 class Prep():
     """Preprocessor class. Not used by the user"""
     def __init__(self):
@@ -61,10 +63,10 @@ class Solv():
     def __init__(self, meshclass):
         self.prepclass = meshclass.prepclass
         self.meshclass = meshclass
-        self.nodesnum = len(self.prepclass.ndict) #number of nodes
-        self.fvector = [0 for i in range(self.nodesnum * 2)] #external forces vector
-        self.kmatrix = [[0 for i in range(self.nodesnum * 2)] for j in range(self.nodesnum * 2)]
-        self.kmatrix_4backsolve = [[0 for i in range(self.nodesnum * 2)] for j in range(self.nodesnum * 2)]
+        self.dofsnum = len(self.prepclass.ndict) * 2 #number of dofs
+        self.fvector = [0 for i in range(self.dofsnum)] #external forces vector
+        self.kmatrix = [[0 for i in range(self.dofsnum)] for j in range(self.dofsnum)]
+        self.kmatrix_4backsolve = [[0 for i in range(self.dofsnum)] for j in range(self.dofsnum)]
         self.nodenum_todof_mapping()
 
     @staticmethod
@@ -123,7 +125,7 @@ class Solv():
         if y is False:
             dof_list.pop(1)
         for dof in dof_list:
-            self.kmatrix[dof] = [0 for i in range(self.nodesnum * 2)]
+            self.kmatrix[dof] = [0 for i in range(self.dofsnum)]
             for row in self.kmatrix:
                 row[dof] = 0
             self.kmatrix[dof][dof] = 1
@@ -181,16 +183,19 @@ class Solv():
         for i in range(len(self.fvector)):
             self.kmatrix[i].append(self.fvector[i])
         self.uvector = self.gausselim(self.kmatrix)
+        #self.uvector = linalg.solve(self.kmatrix, self.fvector)
         return self.uvector
 
     def backsolve_4force(self, nodenum):
         """Back calculation for force"""
         dof = self.nodenum_todof[nodenum]
-        force = 0
-        for i in range(0, self.nodesnum * 2):
+        xforce = 0
+        yforce = 0
+        for i in range(0, self.dofsnum):
             if self.kmatrix_4backsolve[dof][i] * self.uvector[i]:
-                force += self.kmatrix_4backsolve[dof][i] * self.uvector[i]
-        return force
+                xforce += self.kmatrix_4backsolve[dof][i] * self.uvector[i]
+                yforce += self.kmatrix_4backsolve[dof + 1][i] * self.uvector[i]
+        return [xforce, yforce, sqrt(xforce**2 + yforce**2)]
 
 class Mesh():
     """Mesh class contains meshes and initializes preprocessor class"""
@@ -220,10 +225,10 @@ class Mesh():
         #Generating elements on nodes
         for i in range(width):
             for j in range(self.nodenum_4nextmesh, self.nodenum_4nextmesh + height):
-                eles.append(self.prepclass.element(j + 1 + ((height + 1) * i),
-                                                   j + 1 + ((height + 1) * (i + 1)),
+                eles.append(self.prepclass.element(j + ((height + 1) * i),
                                                    j + ((height + 1) * (i + 1)),
-                                                   j + ((height + 1) * i)))
+                                                   j + 1 + ((height + 1) * (i + 1)),
+                                                   j + 1 + ((height + 1) * i)))
         self.meshdict[self.meshnum] = [eles, 0, 0, size, nodes] #0 are placeholders for material
         self.nodenum_4nextmesh += 1 + nodes[-1] - nodes[0]
         return self.meshnum
@@ -247,3 +252,11 @@ class Mesh():
                     return nodenum
             elif meshnum is False:
                 return nodenum_list[0]
+
+class Post():
+    def __init__(self, solverclass):
+        self.solverclass = solverclass
+    def disp(self, nodenum):
+        dof = self.solverclass.nodenum_todof[nodenum]
+        res = self.solverclass.uvector
+        return [res[dof], res[dof + 1], sqrt(res[dof]**2 + res[dof + 1]**2)]

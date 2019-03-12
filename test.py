@@ -1,8 +1,5 @@
 import tinymemb
 
-STEEL_modulus = 200e3
-STEEL_poissratio = .3
-
 GEOM = tinymemb.Geom()
 p1 = GEOM.point(0, 0)
 p2 = GEOM.point(6, 8)
@@ -37,7 +34,7 @@ nodesup_list = [nodesup1, nodesup2, nodesup3, nodesup4]
 for nodesup in nodesup_list:
     SOLV.support(nodesup)
 nodeforce = MESH.selectnode(5, -6)
-SOLV.force(nodeforce, xforce=-1000, yforce=0)
+SOLV.force(nodeforce, xforce=1000, yforce=0)
 
 results = SOLV.solve()
 
@@ -48,11 +45,17 @@ react = SOLV.backsolve_4force(nodesup1)
 react2 = SOLV.backsolve_4force(nodesup2)
 react3 = SOLV.backsolve_4force(nodesup3)
 react4 = SOLV.backsolve_4force(nodesup4)
+leftnode = MESH.selectnode(1, -6)
 
-print(min(results))
-print(max(results))
+POST = tinymemb.Post(SOLV)
+
+res1 = POST.disp(nodeforce)
+res2 = POST.disp(leftnode)
+
+print(res1)
+print(res2)
+
 print(force1)
 print(force2)
 print(force3)
-print(react, react2, react3, react4)
-print(react + react2 + react3 + react4)
+print(react)
