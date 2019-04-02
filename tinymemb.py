@@ -1,5 +1,6 @@
 """Tiny finite element method application for plane stress problems and bolt's forces"""
 from math import sqrt
+from numpy import linalg
 
 class Prep():
     """Preprocessor class. Not used by the user"""
@@ -180,10 +181,10 @@ class Solv():
 
     def solve(self):
         """Solve matrix equation kmatrix * uvector = fvector"""
-        for i in range(len(self.fvector)):
-            self.kmatrix[i].append(self.fvector[i])
-        self.uvector = self.gausselim(self.kmatrix)
-        #self.uvector = linalg.solve(self.kmatrix, self.fvector)
+        #for i in range(len(self.fvector)):
+        #    self.kmatrix[i].append(self.fvector[i])
+        #self.uvector = self.gausselim(self.kmatrix)
+        self.uvector = linalg.solve(self.kmatrix, self.fvector)
         return self.uvector
 
     def backsolve_4force(self, nodenum):
