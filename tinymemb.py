@@ -1,6 +1,6 @@
-"""Tiny finite element method application for plane stress problems and bolt's forces"""
+"""Tiny finite element method application for plane stress problems"""
 from math import sqrt
-from numpy import linalg
+from numpy import linalg, dot
 
 class Prep():
     """Preprocessor class. Not used by the user"""
@@ -69,6 +69,8 @@ class Solv():
         self.kmatrix = [[0 for i in range(self.dofsnum)] for j in range(self.dofsnum)]
         self.kmatrix_4backsolve = [[0 for i in range(self.dofsnum)] for j in range(self.dofsnum)]
         self.nodenum_todof_mapping()
+        self.connectors = []
+        self.conn_number = 0
 
     @staticmethod
     def stiffmatrix_ofsquare(E, v, h):
@@ -92,6 +94,14 @@ class Solv():
                  [k17, k14, k15, k12, k13, k18, k11, k16],
                  [k18, k13, k12, k15, k14, k17, k16, k11]]
         return klist
+
+    @staticmethod
+    def stiffmatrix_ofconn(k):
+        connmatrix = [[k, 0, -k, 0],
+                      [0, k, 0, -k],
+                      [-k, 0, k, 0],
+                      [0, -k, 0, k]]
+        return connmatrix
 
     def nodenum_todof_mapping(self):
         """Creates node number to degree of freedom relation"""
@@ -118,6 +128,11 @@ class Solv():
                     for j in range(8):
                         self.kmatrix[dof_list[i]][dof_list[j]] += elematrix[i][j]
                         self.kmatrix_4backsolve[dof_list[i]][dof_list[j]] += elematrix[i][j]
+
+    def print_matrix(self):
+        for j in range(len(self.kmatrix[0])):
+            print(self.kmatrix[:][j])
+
     def support(self, nodenum, x=True, y=True):
         """Supports creation procedure"""
         dof_list = [self.nodenum_todof[nodenum], self.nodenum_todof[nodenum] + 1]
@@ -137,66 +152,48 @@ class Solv():
         self.fvector[dof] = xforce
         self.fvector[dof + 1] = yforce
 
-    def connector(self, node1, node2, k=2e10):
-        """Inplane onnector creation for nodes pair"""
-        dofs = []
-        dof1 = self.nodenum_todof[node1]
-        dof2 = self.nodenum_todof[node2]
-        dofs.append(dof1)
-        dofs.append(dof1 + 1)
-        dofs.append(dof2)
-        dofs.append(dof2 + 1)
-        connmatrix = [[k, 0, -k, 0],
-                      [0, k, 0, -k],
-                      [-k, 0, k, 0],
-                      [0, -k, 0, k]]
-        for i in range(4):
-            for j in range(4):
-                self.kmatrix[dofs[i]][dofs[j]] += connmatrix[i][j]
-
-    @staticmethod
-    def gausselim(m):
-        """Gauss elimination procedure"""
-        #eliminate columns
-        for col in range(len(m[0])):
-            for row in range(col+1, len(m)):
-                r = [(rowValue * (-(m[row][col] / m[col][col]))) for rowValue in m[col]]
-                m[row] = [sum(pair) for pair in zip(m[row], r)]
-        #now backsolve by substitution
-        ans = []
-        m.reverse() #makes it easier to backsolve
-        for sol in range(len(m)):
-            if sol == 0:
-                ans.append(m[sol][-1] / m[sol][-2])
-            else:
-                inner = 0
-                #substitute in all known coefficients
-                for x in range(sol):
-                    inner += (ans[x]*m[sol][-2-x])
-                #the equation is now reduced to ax + b = c
-                #solve with (c - b) / a
-                ans.append((m[sol][-1]-inner)/m[sol][-sol-2])
-        ans.reverse()
-        return ans
+    def connector(self, node1, node2, k=1e6):
+            """Inplane onnector creation for nodes pair"""
+            dofs = []
+            dof1 = self.nodenum_todof[node1]
+            dof2 = self.nodenum_todof[node2]
+            dofs.append(dof1)
+            dofs.append(dof1 + 1)
+            dofs.append(dof2)
+            dofs.append(dof2 + 1)
+            connmatrix = self.stiffmatrix_ofconn(k)
+            for i in range(4):
+                for j in range(4):
+                    self.kmatrix[dofs[i]][dofs[j]] += connmatrix[i][j]
+            self.connectors.append([k, dof1, dof2])
+            self.conn_number += 1
+            return self.conn_number - 1
 
     def solve(self):
         """Solve matrix equation kmatrix * uvector = fvector"""
-        #for i in range(len(self.fvector)):
-        #    self.kmatrix[i].append(self.fvector[i])
-        #self.uvector = self.gausselim(self.kmatrix)
         self.uvector = linalg.solve(self.kmatrix, self.fvector)
         return self.uvector
 
     def backsolve_4force(self, nodenum):
-        """Back calculation for force"""
+        """Back calculation for reaction force in node"""
         dof = self.nodenum_todof[nodenum]
         xforce = 0
         yforce = 0
         for i in range(0, self.dofsnum):
             if self.kmatrix_4backsolve[dof][i] * self.uvector[i]:
                 xforce += self.kmatrix_4backsolve[dof][i] * self.uvector[i]
+            if self.kmatrix_4backsolve[dof + 1][i] * self.uvector[i]:
                 yforce += self.kmatrix_4backsolve[dof + 1][i] * self.uvector[i]
         return [xforce, yforce, sqrt(xforce**2 + yforce**2)]
+
+    def conn_force(self, conn_number):
+        k = self.connectors[conn_number][0]
+        dof1 = self.connectors[conn_number][1]
+        dof2 = self.connectors[conn_number][2]
+        connmatrix = self.stiffmatrix_ofconn(k)
+        uvector = [self.uvector[dof1], self.uvector[dof1 + 1],
+                   self.uvector[dof2], self.uvector[dof2 + 1]]
+        return dot(connmatrix, uvector)
 
 class Mesh():
     """Mesh class contains meshes and initializes preprocessor class"""
